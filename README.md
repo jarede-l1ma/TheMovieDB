@@ -2,6 +2,9 @@
 
 A modern iOS app built with Swift that allows users to explore movies now playing in theaters, view detailed information, and see beautiful movie posters — all powered by [The Movie Database (TMDb) API](https://www.themoviedb.org/).
 
+
+![App Preview](https://github.com/user-attachments/assets/8929abc7-8642-418f-9b34-fbb70f9fb3d4)
+
 ## 📱 Features
 
 - **Now Playing:** Browse a list of movies currently in theaters.
