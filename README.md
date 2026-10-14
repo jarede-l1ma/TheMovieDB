@@ -30,11 +30,31 @@ cd themoviedb-ios-app
    • Open the file TheMovieDB.xcodeproj using Xcode 15 or newer.
 
 ### 3. Setup TMDb API Token:
-   • This app requires a TMDb API Bearer Token.
-   • In APIClient.swift, replace the value of bearerToken with your own (find it on your TMDb dashboard):
-   
-        private let bearerToken = "YOUR-BEARER-TOKEN-HERE"
-   • Important: Do not share your token publicly.
+   • This app requires a TMDb API Bearer Token (find it on your TMDb dashboard).
+   • Copy `Config/Secrets.example.xcconfig` to `Config/Secrets.xcconfig` and put your token in it:
+
+        cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+        # then edit: TMDB_API_TOKEN = your-token
+   • `Config/Secrets.xcconfig` is git-ignored. `Info.plist` only references `$(TMDB_API_TOKEN)`, so the token never lands in the repository.
+   • Without it the app still builds, but API calls fail with 401.
+   • Important: never commit your token. If you ever do, revoke it on the TMDb dashboard right away.
+
+### 4. Run the tests:
+   • Select the `TheMovieDB` scheme and press ⌘U, or from the terminal:
+
+        xcodebuild test -project TheMovieDB.xcodeproj -scheme TheMovieDB \
+          -destination 'platform=iOS Simulator,name=iPhone 17'
+   • Tests never touch the network: `APIClient` and `ImageLoader` receive a `URLSession`, and the suite injects a `URLProtocol` stub.
+
+### 🧪 Testing approach
+
+The tests follow the [Essential Developer](https://www.essentialdeveloper.com) style:
+
+- **Spies** record every message they receive as an ordered `[Message]` list (`HomePresenterSpy`, `HomeDisplaySpy`, `HomeRouterSpy`, ...), so a test asserts the whole conversation at once.
+- **Stubs** return canned results (`APIClientStub`, `URLProtocolStub`). `APIClientStub` can also hold requests in flight, which makes cancellation and pagination races deterministic, with no `sleep`.
+- **Fixtures** (`Movie.fixture(...)`, `PagedResponse.fixture(...)`, `Home.ItemViewModel.fixtures(ids:)`) build test data with sensible defaults.
+- **Memory-leak tracking** (`trackForMemoryLeaks`) runs on every SUT and collaborator created by a `makeSUT` factory.
+- Tests are named `test_<unit>_<behavior>` and cover each VIP-C layer plus the module composition, router and coordinator.
 
 ### 🏛️ Architectural Overview & Decisions
 

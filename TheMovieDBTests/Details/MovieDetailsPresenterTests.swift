@@ -1,120 +1,106 @@
-@testable import TheMovieDB
 import XCTest
+@testable import TheMovieDB
 
+@MainActor
 final class MovieDetailsPresenterTests: XCTestCase {
-    
-    private var sut: MovieDetailsPresenter!
-    
-    override func tearDown() {
-        sut = nil
-        super.tearDown()
-    }
-    
-    func testPresentLoading() {
-        let doubles = Doubles()
-        sut = makeSUT(doubles: doubles)
-        
-        sut.presentLoading(true)
-        
-        XCTAssertEqual(doubles.view.displayLoadingCallCount, 1)
-        XCTAssertEqual(doubles.view.displayLoadingCalls.last, true)
-        
-        sut.presentLoading(false)
-        
-        XCTAssertEqual(doubles.view.displayLoadingCallCount, 2)
-        XCTAssertEqual(doubles.view.displayLoadingCalls.last, false)
-    }
-    
-    func testPresentDetails() {
-        let doubles = Doubles()
-        sut = makeSUT(doubles: doubles)
-        let movie = doubles.createMockMovie()
-        
-        sut.present(details: movie)
-        
-        XCTAssertEqual(doubles.view.displayViewModelCallCount, 1)
-        let viewModel = doubles.view.displayViewModelCalls.last
-        XCTAssertEqual(viewModel?.title, "Test Movie")
-        XCTAssertEqual(viewModel?.subtitle, "2024-01-01")
-        XCTAssertEqual(viewModel?.overview, "Test overview")
-        XCTAssertEqual(viewModel?.posterPath, "/test_poster.jpg")
-        XCTAssertEqual(viewModel?.ratingText, "8.5")
-    }
-    
-    func testPresentDetails_withNilTitle() {
-        let doubles = Doubles()
-        sut = makeSUT(doubles: doubles)
-        let movieWithNilTitle = Movie(id: 1, title: nil, overview: "Overview", 
-                                     posterPath: "/poster.jpg", backdropPath: "/backdrop.jpg",
-                                     releaseDate: "2024-01-01", voteAverage: 7.5)
-        
-        sut.present(details: movieWithNilTitle)
-        
-        let viewModel = doubles.view.displayViewModelCalls.last
-        XCTAssertEqual(viewModel?.title, "Sem título")
-    }
-    
-    func testPresentDetails_withNilVoteAverage() {
-        let doubles = Doubles()
-        sut = makeSUT(doubles: doubles)
-        let movieWithNilRating = Movie(id: 1, title: "Movie", overview: "Overview",
-                                      posterPath: "/poster.jpg", backdropPath: "/backdrop.jpg",
-                                      releaseDate: "2024-01-01", voteAverage: nil)
-        
-        sut.present(details: movieWithNilRating)
-        
-        let viewModel = doubles.view.displayViewModelCalls.last
-        XCTAssertNil(viewModel?.ratingText)
-    }
-    
-    func testPresentError() {
-        let doubles = Doubles()
-        sut = makeSUT(doubles: doubles)
-        
-        sut.presentError("Network Error")
-        
-        XCTAssertEqual(doubles.view.displayErrorCallCount, 1)
-        XCTAssertEqual(doubles.view.displayErrorCalls.last, "Network Error")
-    }
-    
-    func testWeakViewReference() {
-        var doubles: Doubles? = Doubles()
-        sut = makeSUT(doubles: doubles!)
-        
-        doubles = nil
-        
-        sut.presentLoading(true)
-        sut.present(details: Movie(id: 1, title: "Test", overview: nil, posterPath: nil, 
-                                  backdropPath: nil, releaseDate: nil, voteAverage: nil))
-        sut.presentError("Test Error")
-    }
-}
 
-extension MovieDetailsPresenterTests {
-    
-    func makeSUT(doubles: Doubles) -> MovieDetailsPresenter {
-        let presenter = MovieDetailsPresenter()
-        presenter.view = doubles.view
-        return presenter
+    func test_presentLoading_forwardsEachStateToViewInOrder() async {
+        let (sut, view) = makeSUT()
+
+        sut.presentLoading(true)
+        sut.presentLoading(false)
+
+        XCTAssertEqual(view.messages, [.loading(true), .loading(false)])
     }
-    
-    struct Doubles {
-        let view: MockMovieDetailsDisplayLogic
-        
-        init() {
-            self.view = MockMovieDetailsDisplayLogic()
-        }
-        
-        func createMockMovie() -> Movie {
-            return Movie(
-                id: 123,
+
+    func test_presentDetails_mapsMovieToViewModel() async {
+        let (sut, view) = makeSUT()
+        let movie = Movie.fixture(
+            title: "Test Movie",
+            overview: "Test overview",
+            posterPath: "/test_poster.jpg",
+            releaseDate: "2024-01-01",
+            voteAverage: 8.5
+        )
+
+        sut.present(details: movie)
+
+        XCTAssertEqual(view.messages, [
+            .viewModel(MovieDetails.ViewModel(
                 title: "Test Movie",
+                subtitle: "2024-01-01",
                 overview: "Test overview",
                 posterPath: "/test_poster.jpg",
-                backdropPath: "/test_backdrop.jpg",
-                releaseDate: "2024-01-01",
-                voteAverage: 8.5
-            )
-        }
+                ratingText: "8.5"
+            ))
+        ])
+    }
+
+    func test_presentDetails_withoutTitle_usesLocalizedFallback() async {
+        let (sut, view) = makeSUT()
+
+        sut.present(details: .fixture(title: nil))
+
+        XCTAssertEqual(viewModel(in: view)?.title, String(localized: "movie.noTitle"))
+    }
+
+    func test_presentDetails_withoutVoteAverage_hasNoRatingText() async {
+        let (sut, view) = makeSUT()
+
+        sut.present(details: .fixture(voteAverage: nil))
+
+        XCTAssertNil(viewModel(in: view)?.ratingText)
+    }
+
+    func test_presentDetails_formatsRatingWithOneDecimalPlace() async {
+        let (sut, view) = makeSUT()
+
+        sut.present(details: .fixture(voteAverage: 7))
+        sut.present(details: .fixture(voteAverage: 7.456))
+
+        XCTAssertEqual(viewModels(in: view).map(\.ratingText), ["7.0", "7.5"])
+    }
+
+    func test_presentError_forwardsMessageToView() async {
+        let (sut, view) = makeSUT()
+
+        sut.presentError("Network Error")
+
+        XCTAssertEqual(view.messages, [.error("Network Error")])
+    }
+
+    func test_present_doesNotRetainView() async {
+        let sut = MovieDetailsPresenter()
+        var view: MovieDetailsDisplaySpy? = MovieDetailsDisplaySpy()
+        sut.view = view
+        weak var weakView = view
+
+        view = nil
+
+        XCTAssertNil(weakView, "Presenter must hold its view weakly")
+        sut.presentLoading(true)
+        sut.presentError("ignored")
+    }
+
+    // MARK: - Helpers
+
+    private func makeSUT(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> (sut: MovieDetailsPresenter, view: MovieDetailsDisplaySpy) {
+        let view = MovieDetailsDisplaySpy()
+        let sut = MovieDetailsPresenter()
+        sut.view = view
+        trackForMemoryLeaks(sut, file: file, line: line)
+        trackForMemoryLeaks(view, file: file, line: line)
+        return (sut, view)
+    }
+
+    private func viewModels(in view: MovieDetailsDisplaySpy) -> [MovieDetails.ViewModel] {
+        view.messages.compactMap { if case let .viewModel(viewModel) = $0 { viewModel } else { nil } }
+    }
+
+    private func viewModel(in view: MovieDetailsDisplaySpy) -> MovieDetails.ViewModel? {
+        viewModels(in: view).last
     }
 }
