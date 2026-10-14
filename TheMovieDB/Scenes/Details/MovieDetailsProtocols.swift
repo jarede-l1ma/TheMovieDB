@@ -20,7 +20,7 @@ protocol MovieDetailsDisplayLogic: AnyObject {
 }
 
 /// Namespace for the details feature, including the view model.
-enum MovieDetails {
+nonisolated enum MovieDetails {
     /// View model struct used to populate the details screen UI.
     struct ViewModel: Equatable {
         let title: String

@@ -26,7 +26,7 @@ final class HomeRouterTests: XCTestCase {
         let sut = HomeRouter()
         var viewController: UIViewController? = UIViewController()
         sut.viewController = viewController
-        weak var weakViewController = viewController
+        weak let weakViewController = viewController
 
         viewController = nil
 

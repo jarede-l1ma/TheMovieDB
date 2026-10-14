@@ -7,7 +7,7 @@ struct PagedResponse<T: Decodable>: Decodable {
     let totalResults: Int
 }
 
-struct Movie: Decodable, Identifiable, Hashable {
+nonisolated struct Movie: Decodable, Identifiable, Hashable {
     let id: Int
     let title: String?
     let overview: String?

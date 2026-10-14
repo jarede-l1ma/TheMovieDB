@@ -43,7 +43,7 @@ final class HomePresenterTests: XCTestCase {
         let sut = HomePresenter()
         var view: HomeDisplaySpy? = HomeDisplaySpy()
         sut.view = view
-        weak var weakView = view
+        weak let weakView = view
 
         view = nil
 

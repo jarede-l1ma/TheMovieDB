@@ -73,7 +73,7 @@ final class MovieDetailsPresenterTests: XCTestCase {
         let sut = MovieDetailsPresenter()
         var view: MovieDetailsDisplaySpy? = MovieDetailsDisplaySpy()
         sut.view = view
-        weak var weakView = view
+        weak let weakView = view
 
         view = nil
 

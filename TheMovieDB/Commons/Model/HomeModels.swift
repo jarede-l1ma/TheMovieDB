@@ -1,6 +1,6 @@
 import Foundation
 
-enum Home {
+nonisolated enum Home {
     enum Mode: Equatable {
         case nowPlaying
     }
