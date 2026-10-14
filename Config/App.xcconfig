@@ -1,0 +1,4 @@
+// Shared build settings for the app target.
+// Empty default so the project still builds without secrets; the real value comes from Secrets.xcconfig.
+TMDB_API_TOKEN =
+#include? "Secrets.xcconfig"
