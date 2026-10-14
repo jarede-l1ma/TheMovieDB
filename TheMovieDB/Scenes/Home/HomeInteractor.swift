@@ -11,6 +11,7 @@ final class HomeInteractor: HomeBusinessLogic {
     private var isRequesting: Bool = false
 
     private var currentLoadTask: Task<Void, Never>?
+    private var paginationTask: Task<Void, Never>?
 
     /// Initializes the interactor with its dependencies.
     /// - Parameters:
@@ -21,13 +22,16 @@ final class HomeInteractor: HomeBusinessLogic {
         self.api = api
     }
 
-    deinit {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {
         currentLoadTask?.cancel()
+        paginationTask?.cancel()
     }
 
     /// Called when the view is loaded. Begins loading the first page of movies.
     func viewDidLoad() {
         currentLoadTask?.cancel()
+        paginationTask?.cancel()
         currentLoadTask = Task { await loadFirstPage() }
     }
 
@@ -36,7 +40,9 @@ final class HomeInteractor: HomeBusinessLogic {
         guard !isRequesting, page < totalPages else { return }
         let threshold = 6
         if visibleIndex >= max(0, totalCount - threshold) {
-            Task { await loadNextPage() }
+            // Flag synchronously: `willDisplay` fires for several cells in a row, before the Task below starts.
+            isRequesting = true
+            paginationTask = Task { await loadNextPage() }
         }
     }
 

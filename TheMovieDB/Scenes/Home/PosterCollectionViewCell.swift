@@ -17,6 +17,7 @@ final class PosterCollectionViewCell: UICollectionViewCell {
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .title3)
+        label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 2
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -36,10 +37,20 @@ final class PosterCollectionViewCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupViews()
+        setupAccessibility()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        setupAccessibility()
+    }
+    
+    private func setupAccessibility() {
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        accessibilityIdentifier = DesignSystem.Accessibility.posterCell
+        imageView.accessibilityIdentifier = DesignSystem.Accessibility.posterImage
+        titleLabel.accessibilityIdentifier = DesignSystem.Accessibility.movieTitle
     }
     
     /// Configures the view hierarchy and constraints.
@@ -76,12 +87,19 @@ final class PosterCollectionViewCell: UICollectionViewCell {
         imageView.image = nil
         activity.stopAnimating()
         titleLabel.text = nil
+        accessibilityLabel = nil
     }
     
     /// Configures the cell with the given view model.
     /// - Parameter vm: The view model containing title and poster path.
     func configure(with vm: Home.ItemViewModel) {
         titleLabel.text = vm.title
+        
+        var accLabel = vm.title
+        if let subtitle = vm.subtitle, !subtitle.isEmpty {
+            accLabel += ", " + subtitle
+        }
+        accessibilityLabel = accLabel
         
         imageTask?.cancel()
         imageTask = nil

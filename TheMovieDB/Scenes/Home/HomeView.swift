@@ -31,11 +31,12 @@ final class HomeView: UIView {
     private func setupViews() {
         backgroundColor = .systemBackground
         
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = DesignSystem.Colors.background
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.alwaysBounceHorizontal = false
         collectionView.isDirectionalLockEnabled = true
+        collectionView.accessibilityIdentifier = DesignSystem.Accessibility.homeCollectionView
         
         collectionView.register(
             PosterCollectionViewCell.self, 
@@ -46,6 +47,7 @@ final class HomeView: UIView {
         
         activityIndicator.hidesWhenStopped = true
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        activityIndicator.accessibilityIdentifier = DesignSystem.Accessibility.homeActivityIndicator
         addSubview(activityIndicator)
     }
     
@@ -83,7 +85,6 @@ final class HomeView: UIView {
                 heightDimension: .estimated(300)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
-            item.contentInsets = .init(top: 8, leading: 8, bottom: 8, trailing: 8)
 
             let groupSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1.0),
@@ -95,9 +96,11 @@ final class HomeView: UIView {
             } else {
                 group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitem: item, count: columns)
             }
+            group.interItemSpacing = .fixed(16)
 
             let section = NSCollectionLayoutSection(group: group)
-            section.contentInsets = .init(top: 8, leading: 8, bottom: 8, trailing: 8)
+            section.interGroupSpacing = 16
+            section.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
             section.orthogonalScrollingBehavior = .none
             return section
         }

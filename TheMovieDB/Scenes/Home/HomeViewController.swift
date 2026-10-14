@@ -1,22 +1,31 @@
 import UIKit
 
-/// Main ViewController responsible for displaying the list of movies on screen.
+/// Main ViewController responsible for displaying the list of movies on screen in VIPER architecture.
 final class HomeViewController: UIViewController {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {}
+
     // MARK: - Properties
-    private let viewModel: HomeViewModel
+    private let interactor: HomeBusinessLogic
+    private let router: HomeRouterLogic
     private let homeView = HomeView()
+    
+    /// Internal datasource items currently displayed in the collection view.
+    private var items: [Home.ItemViewModel] = []
     
     // MARK: - Initialization
 
-    /// Initializes the HomeViewController with its ViewModel.
-    /// - Parameter viewModel: The ViewModel managing the data for the screen.
-    init(viewModel: HomeViewModel) {
-        self.viewModel = viewModel
+    /// Initializes the HomeViewController with VIPER business dependencies (SOLID Dependency Inversion Principle).
+    /// - Parameters:
+    ///   - interactor: Handles business logic for data fetching and state updates.
+    ///   - router: Handles navigation from the Home screen.
+    init(interactor: HomeBusinessLogic, router: HomeRouterLogic) {
+        self.interactor = interactor
+        self.router = router
         super.init(nibName: nil, bundle: nil)
         // Localized navigation bar title
         self.title = String(localized: "home.title")
         self.navigationItem.largeTitleDisplayMode = .never
-        setupBindings()
     }
     
     required init?(coder: NSCoder) {
@@ -32,7 +41,7 @@ final class HomeViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupCollectionView()
-        viewModel.viewDidLoad()
+        interactor.viewDidLoad()
     }
     
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -52,54 +61,16 @@ final class HomeViewController: UIViewController {
         homeView.collectionView.delegate = self
         homeView.collectionView.dataSource = self
     }
-    
-    /// Binds ViewModel events to UI updates.
-    private func setupBindings() {
-        viewModel.onItemsUpdated = { [weak self] items in
-            self?.homeView.collectionView.reloadData()
-        }
-        
-        viewModel.onItemsAppended = { [weak self] items in
-            guard let self = self else { return }
-            let start = self.viewModel.items.count - items.count
-            let end = self.viewModel.items.count
-            var indexPaths: [IndexPath] = []
-            for i in start..<end { indexPaths.append(IndexPath(item: i, section: 0)) }
-            
-            self.homeView.collectionView.performBatchUpdates {
-                self.homeView.collectionView.insertItems(at: indexPaths)
-            }
-        }
-        
-        viewModel.onLoadingStateChanged = { [weak self] isLoading in
-            if isLoading {
-                self?.homeView.activityIndicator.startAnimating()
-            } else {
-                self?.homeView.activityIndicator.stopAnimating()
-            }
-        }
-        
-        viewModel.onErrorOccurred = { [weak self] message in
-            // Localized alert title and button text
-            let alert = UIAlertController(
-                title: String(localized: "alert.error.title"),
-                message: message,
-                preferredStyle: .alert
-            )
-            alert.addAction(UIAlertAction(title: String(localized: "alert.ok.button"), style: .default))
-            self?.present(alert, animated: true)
-        }
-    }
 }
 
 // MARK: - UICollectionViewDataSource & Delegate
 extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        viewModel.items.count
+        items.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let vm = viewModel.items[indexPath.item]
+        let vm = items[indexPath.item]
         guard let cell = collectionView.dequeueReusableCell(
             withReuseIdentifier: PosterCollectionViewCell.reuseId,
             for: indexPath
@@ -110,12 +81,57 @@ extension HomeViewController: UICollectionViewDataSource, UICollectionViewDelega
         return cell
     }
     
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        let visibleMax = homeView.collectionView.indexPathsForVisibleItems.map { $0.item }.max() ?? 0
-        viewModel.loadMoreIfNeeded(visibleIndex: visibleMax, totalCount: viewModel.items.count)
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // Optimized pagination trigger: evaluated only once per newly displayed cell instead of continuously during scroll
+        interactor.loadMoreIfNeeded(visibleIndex: indexPath.item, totalCount: items.count)
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        viewModel.didSelectItem(at: indexPath.item)
+        guard indexPath.item < items.count else { return }
+        let item = items[indexPath.item]
+        router.routeToMovieDetails(movieID: item.id, title: item.title)
+    }
+}
+
+// MARK: - HomeDisplayLogic
+extension HomeViewController: HomeDisplayLogic {
+    /// Displays the initial state of the screen with a loaded list of items.
+    func displayInitial(title: String, items: [Home.ItemViewModel], isLoading: Bool) {
+        self.title = title
+        self.items = items
+        homeView.collectionView.reloadData()
+        displayLoading(isLoading)
+    }
+    
+    /// Appends new items to the current list for infinite scroll pagination.
+    func displayAppend(items: [Home.ItemViewModel]) {
+        let start = self.items.count
+        let end = start + items.count
+        self.items.append(contentsOf: items)
+        let indexPaths = (start..<end).map { IndexPath(item: $0, section: 0) }
+        
+        homeView.collectionView.performBatchUpdates {
+            homeView.collectionView.insertItems(at: indexPaths)
+        }
+    }
+    
+    /// Updates the loading state activity indicator.
+    func displayLoading(_ loading: Bool) {
+        if loading {
+            homeView.activityIndicator.startAnimating()
+        } else {
+            homeView.activityIndicator.stopAnimating()
+        }
+    }
+    
+    /// Displays an error alert message to the user.
+    func displayError(_ message: String) {
+        let alert = UIAlertController(
+            title: String(localized: "alert.error.title"),
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: String(localized: "alert.ok.button"), style: .default))
+        present(alert, animated: true)
     }
 }

@@ -3,6 +3,9 @@ import Foundation
 /// Presenter for the Home feature.
 /// Responsible for transforming data and forwarding it to the ViewModel.
 final class HomePresenter: HomePresentationLogic {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {}
+
     weak var view: HomeDisplayLogic?
 
     func presentInitial(title: String, items: [Home.ItemViewModel], isLoading: Bool) {

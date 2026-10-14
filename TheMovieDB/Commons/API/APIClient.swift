@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Protocol defining the requirements for an API client capable of fetching Decodable models.
 protocol APIClientProtocol {
@@ -11,29 +12,46 @@ struct APIClient: APIClientProtocol {
     /// Shared singleton instance for app-wide usage.
     static let shared = APIClient()
 
-    /// The base URL for the TMDb API.
-    private let baseURL = URL(string: "https://api.themoviedb.org/3")
-    /// Bearer token for authentication (keep this secure in production).
-    private let bearerToken = "YOUR-BEARER-TOKEN-HERE"
+    private let session: URLSession
+    private let baseURL: URL
+    /// Resolved on every request so the token can be provisioned after launch.
+    private let bearerToken: () -> String
+
+    /// - Parameters:
+    ///   - session: The session used to perform requests (inject a stubbed one in tests).
+    ///   - baseURL: The base URL for the TMDb API.
+    ///   - bearerToken: Provider of the bearer token, loaded from the environment configuration by default.
+    init(
+        session: URLSession = .shared,
+        baseURL: URL = EnvironmentConfig.shared.apiBaseURL,
+        bearerToken: @escaping () -> String = { EnvironmentConfig.shared.apiBearerToken }
+    ) {
+        self.session = session
+        self.baseURL = baseURL
+        self.bearerToken = bearerToken
+    }
 
     /// Enum representing available API endpoints and their parameters.
-    enum Endpoint {
+    enum Endpoint: Equatable {
         case nowPlaying(page: Int, language: String? = nil)
         case movieDetails(id: Int, language: String? = nil)
 
         /// Builds a URLRequest for the endpoint using the provided baseURL and bearer token.
-        func makeURLRequest(baseURL: URL, bearerToken: String) throws -> URLRequest {
+        /// - Parameter preferredLanguages: Languages used when the endpoint has no explicit `language`.
+        func makeURLRequest(
+            baseURL: URL,
+            bearerToken: String,
+            preferredLanguages: [String] = Locale.preferredLanguages
+        ) throws -> URLRequest {
             var components = URLComponents()
             components.scheme = baseURL.scheme
             components.host = baseURL.host
             components.path = baseURL.path + path
-            components.queryItems = queryItems
+            components.queryItems = queryItems(preferredLanguages: preferredLanguages)
 
             guard let url = components.url else { throw URLError(.badURL) }
 
-            #if DEBUG
-            print("[TMDBAPIClient] GET \(url.absoluteString)")
-            #endif
+            AppLogger.api.debug("GET \(url.absoluteString)")
 
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
@@ -53,34 +71,28 @@ struct APIClient: APIClientProtocol {
         }
 
         /// The query parameters for each endpoint.
-        private var queryItems: [URLQueryItem] {
+        private func queryItems(preferredLanguages: [String]) -> [URLQueryItem] {
             switch self {
             case let .nowPlaying(page, language):
                 return [
                     URLQueryItem(name: "page", value: String(page)),
-                    URLQueryItem(name: "language", value: Self.resolveLanguage(language))
+                    URLQueryItem(name: "language", value: Self.resolveLanguage(language, preferredLanguages))
                 ]
             case let .movieDetails(_, language):
                 return [
-                    URLQueryItem(name: "language", value: Self.resolveLanguage(language))
+                    URLQueryItem(name: "language", value: Self.resolveLanguage(language, preferredLanguages))
                 ]
             }
         }
 
         /// Detects the preferred language based on the user's device or app settings.
-        private static func resolveLanguage(_ language: String?) -> String {
+        private static func resolveLanguage(_ language: String?, _ preferredLanguages: [String]) -> String {
             if let language, !language.isEmpty {
                 return language
             }
             // Detect preferred language from system settings (e.g., "pt-BR", "en-US")
-            let preferred = Locale.preferredLanguages.first ?? "en-US"
-            if preferred.hasPrefix("pt") {
-                return "pt-BR"
-            } else if preferred.hasPrefix("en") {
-                return "en-US"
-            } else {
-                return "en-US" // fallback
-            }
+            let preferred = preferredLanguages.first ?? "en-US"
+            return preferred.hasPrefix("pt") ? "pt-BR" : "en-US"
         }
     }
 
@@ -89,23 +101,18 @@ struct APIClient: APIClientProtocol {
     /// - Returns: The decoded model of type `T`.
     /// - Throws: URLError or decoding errors.
     func request<T: Decodable>(_ endpoint: Endpoint) async throws -> T {
-        guard let baseURL else { throw URLError(.badURL) }
-        let request = try endpoint.makeURLRequest(baseURL: baseURL, bearerToken: bearerToken)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let request = try endpoint.makeURLRequest(baseURL: baseURL, bearerToken: bearerToken())
+        let (data, response) = try await session.data(for: request)
 
         guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }
 
-        #if DEBUG
-        print("[TMDBAPIClient] status=\(http.statusCode)")
-        #endif
+        AppLogger.api.debug("HTTP status=\(http.statusCode)")
 
         guard (200..<300).contains(http.statusCode) else {
             let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
-            #if DEBUG
-            print("[TMDBAPIClient] error body: \(bodyPreview)")
-            #endif
+            AppLogger.api.error("HTTP request failed (\(http.statusCode)): \(bodyPreview)")
             // Localized error message for request failures
             throw NSError(
                 domain: "TMDBAPIClient",

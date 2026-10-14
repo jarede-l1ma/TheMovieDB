@@ -2,6 +2,9 @@ import UIKit
 
 /// ViewController responsible for displaying detailed movie information.
 final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLogic {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {}
+
 
     private let interactor: MovieDetailsBusinessLogic
 
@@ -48,11 +51,14 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
         aspect.priority = .required
         aspect.isActive = true
         image.translatesAutoresizingMaskIntoConstraints = false
+        image.isAccessibilityElement = true
+        image.accessibilityLabel = String(localized: "movie.poster.accessibility", defaultValue: "Capa do filme")
         return image
     }()
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .title2)
+        label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
         label.setContentCompressionResistancePriority(.required, for: .vertical)
         return label
@@ -60,6 +66,7 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
     private lazy var subtitleLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
         label.numberOfLines = 0
         return label
@@ -67,6 +74,7 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
     private lazy var overviewLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .body)
+        label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
         label.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         return label
@@ -74,6 +82,7 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
     private lazy var ratingLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
         label.numberOfLines = 1
         return label
@@ -85,6 +94,7 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
         return ac
     }()
     private var posterWidthConstraint: NSLayoutConstraint?
+    private var posterTask: Task<Void, Never>?
 
     /// Initializes the details screen with its business logic dependency.
     /// - Parameters:
@@ -192,9 +202,21 @@ final class MovieDetailsViewController: UIViewController, MovieDetailsDisplayLog
         }
         overviewLabel.text = viewModel.overview
 
-        Task {
-            let image = await ImageLoader.shared.loadImage(from: viewModel.posterPath)
-            await MainActor.run { self.posterImageView.image = image }
+        loadPoster(path: viewModel.posterPath)
+    }
+
+    /// Loads the poster, cancelling any previous load so a late result never overwrites a newer one.
+    private func loadPoster(path: String?) {
+        posterTask?.cancel()
+        posterTask = nil
+        posterImageView.image = nil
+
+        guard let path, !path.isEmpty else { return }
+
+        posterTask = Task { [weak self] in
+            let image = await ImageLoader.shared.loadImage(from: path)
+            guard !Task.isCancelled else { return }
+            self?.posterImageView.image = image
         }
     }
 

@@ -2,6 +2,9 @@ import Foundation
 
 /// Handles business logic and data loading for the movie details screen.
 final class MovieDetailsInteractor: MovieDetailsBusinessLogic {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {}
+
     private let presenter: MovieDetailsPresentationLogic
     private let api: APIClientProtocol
     private let movieID: Int

@@ -3,6 +3,9 @@ import Foundation
 /// Presenter for the movie details feature.
 /// Responsible for transforming data and forwarding it to the view.
 final class MovieDetailsPresenter: MovieDetailsPresentationLogic {
+    // Opt out of the implicit isolated deinit: nested isolated deinits abort in the iOS 26.0/26.1 runtime.
+    nonisolated deinit {}
+
     weak var view: MovieDetailsDisplayLogic?
 
     /// Presents the loading state to the view.

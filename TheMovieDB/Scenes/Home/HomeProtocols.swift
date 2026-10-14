@@ -6,7 +6,7 @@ protocol HomeBusinessLogic: AnyObject {
     func loadMoreIfNeeded(visibleIndex: Int, totalCount: Int)
 }
 
-/// Protocol for presenting data to the ViewModel.
+/// Protocol for presenting formatted data to the view in VIPER architecture.
 protocol HomePresentationLogic: AnyObject {
     func presentInitial(title: String, items: [Home.ItemViewModel], isLoading: Bool)
     func presentAppend(items: [Home.ItemViewModel])
